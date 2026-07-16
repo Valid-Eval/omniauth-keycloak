@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.5.4](https://github.com/Valid-Eval/omniauth-keycloak/tree/v1.5.4) (2026-07-16)
+
+**Security fixes (Valid-Eval fork):**
+
+- `raw_info` now decodes the OIDC `id_token` returned in the token response instead of the OAuth2 access token (CWE-287, F-CS-12).
+- `JSON::JWT.decode` now pins the expected signing algorithm to `RS256`, so a forged token using `alg: none` or an HS256/RS256 algorithm-confusion attack is rejected outright instead of silently validating (CWE-347/757, F-CS-11).
+- `raw_info` now validates the id_token's `iss` against the configured realm URL and `aud` against the configured client id, raising `OmniAuth::Strategies::KeycloakOpenId::InvalidIdToken` on mismatch.
+
 ## [v1.5.3](https://github.com/ccrockett/omniauth-keycloak/tree/v1.5.3) (2025-04-12)
 
 [Full Changelog](https://github.com/ccrockett/omniauth-keycloak/compare/v1.5.2...v1.5.3)

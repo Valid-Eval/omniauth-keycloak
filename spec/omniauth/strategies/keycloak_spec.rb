@@ -207,4 +207,78 @@ RSpec.describe OmniAuth::Strategies::KeycloakOpenId do
       end
     end
   end
+
+  describe '#raw_info' do
+    let(:client_id) { 'Example-Client' }
+    let(:site) { 'http://localhost:8080/' }
+    let(:realm) { 'example-realm' }
+    let(:issuer) { 'http://localhost:8080/auth/realms/example-realm' }
+    let(:rsa_key) { OpenSSL::PKey::RSA.generate(2048) }
+    let(:jwk) { JSON::JWK.new(rsa_key) }
+
+    subject do
+      strategy = OmniAuth::Strategies::KeycloakOpenId.new('keycloak-openid', client_id, 'client-secret',
+        client_options: {site: site, realm: realm})
+      strategy.instance_variable_set(:@certs, [jwk])
+      strategy
+    end
+
+    def id_token_string(claims: {}, alg: :RS256, key: rsa_key, set_kid: true)
+      jwt = JSON::JWT.new({
+        'iss' => issuer,
+        'aud' => client_id,
+        'sub' => 'user-123',
+        'exp' => (Time.now + 3600).to_i,
+        'iat' => Time.now.to_i
+      }.merge(claims))
+
+      return jwt.to_s if alg == :none
+
+      jwt.kid = jwk[:kid] if set_kid
+      jwt.sign(key, alg).to_s
+    end
+
+    def stub_access_token(strategy, id_token)
+      access_token = double('AccessToken')
+      allow(access_token).to receive(:[]).with('id_token').and_return(id_token)
+      allow(access_token).to receive(:token).and_return('opaque-oauth-access-token-should-not-be-decoded')
+      strategy.access_token = access_token
+    end
+
+    it 'decodes the OIDC id_token from the token response, not the OAuth access token' do
+      stub_access_token(subject, id_token_string)
+
+      expect(subject.raw_info['sub']).to eq('user-123')
+    end
+
+    it 'rejects tokens with alg: none' do
+      stub_access_token(subject, id_token_string(alg: :none))
+
+      expect { subject.raw_info }.to raise_error(JSON::JWT::UnexpectedAlgorithm)
+    end
+
+    it 'rejects HS256-signed tokens (algorithm confusion)' do
+      stub_access_token(subject, id_token_string(alg: :HS256, key: 'attacker-controlled-secret', set_kid: false))
+
+      expect { subject.raw_info }.to raise_error(JSON::JWT::UnexpectedAlgorithm)
+    end
+
+    it 'rejects tokens with an unexpected issuer' do
+      stub_access_token(subject, id_token_string(claims: {'iss' => 'http://evil.example.com/auth/realms/example-realm'}))
+
+      expect { subject.raw_info }.to raise_error(OmniAuth::Strategies::KeycloakOpenId::InvalidIdToken, /issuer/)
+    end
+
+    it 'rejects tokens with an unexpected audience' do
+      stub_access_token(subject, id_token_string(claims: {'aud' => 'some-other-client'}))
+
+      expect { subject.raw_info }.to raise_error(OmniAuth::Strategies::KeycloakOpenId::InvalidIdToken, /audience/)
+    end
+
+    it 'accepts an audience array that includes the client id' do
+      stub_access_token(subject, id_token_string(claims: {'aud' => [client_id, 'some-other-client']}))
+
+      expect(subject.raw_info['sub']).to eq('user-123')
+    end
+  end
 end

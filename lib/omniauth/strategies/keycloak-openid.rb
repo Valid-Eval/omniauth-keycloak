@@ -10,6 +10,9 @@ module OmniAuth
             class Error < RuntimeError; end
             class ConfigurationError < Error; end
             class IntegrationError < Error; end
+            class InvalidIdToken < Error; end
+
+            ID_TOKEN_ALGORITHM = :RS256
 
             attr_reader :authorize_url
             attr_reader :token_url
@@ -124,10 +127,32 @@ module OmniAuth
             end
 
             def raw_info
-                id_token_string = access_token.token
+                id_token_string = access_token['id_token']
                 jwks = JSON::JWK::Set.new(@certs)
-                id_token = JSON::JWT.decode id_token_string, jwks
+                id_token = JSON::JWT.decode id_token_string, jwks, ID_TOKEN_ALGORITHM
+                verify_issuer! id_token
+                verify_audience! id_token
                 id_token
+            end
+
+            def expected_issuer
+                realm = options.client_options[:realm].nil? ? options.client_id : options.client_options[:realm]
+                site = options.client_options[:site]
+
+                URI.join(site, "#{auth_url_base}/realms/#{realm}").to_s
+            end
+
+            def verify_issuer!(id_token)
+                return if id_token['iss'] == expected_issuer
+
+                raise InvalidIdToken, "Unexpected id_token issuer: #{id_token['iss'].inspect}"
+            end
+
+            def verify_audience!(id_token)
+                audience = Array(id_token['aud'])
+                return if audience.include?(options.client_id)
+
+                raise InvalidIdToken, "Unexpected id_token audience: #{id_token['aud'].inspect}"
             end
 
             OmniAuth.config.add_camelization('keycloak_openid', 'KeycloakOpenId')
