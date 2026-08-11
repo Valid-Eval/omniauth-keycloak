@@ -25,7 +25,7 @@ module OmniAuth
 
                     prevent_site_option_mistake
 
-                    realm = options.client_options[:realm].nil? ? options.client_id : options.client_options[:realm]
+                    realm = realm_name
                     site = options.client_options[:site]
 
                     raise_on_failure = options.client_options.fetch(:raise_on_failure, false)
@@ -136,10 +136,14 @@ module OmniAuth
             end
 
             def expected_issuer
-                realm = options.client_options[:realm].nil? ? options.client_id : options.client_options[:realm]
+                realm = realm_name
                 site = options.client_options[:site]
 
                 URI.join(site, "#{auth_url_base}/realms/#{realm}").to_s
+            end
+
+            def realm_name
+                options.client_options[:realm].nil? ? options.client_id : options.client_options[:realm]
             end
 
             def verify_issuer!(id_token)
