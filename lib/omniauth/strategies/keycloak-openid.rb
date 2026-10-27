@@ -42,10 +42,16 @@ module OmniAuth
                     if (response.status == 200)
                         json = JSON.parse(response.body)
 
-                        @issuer = json["issuer"]
-                        if @issuer != configured_issuer
-                            log :warn, "Keycloak discovery issuer #{@issuer.inspect} differs from the configured " \
-                                       "site/realm #{configured_issuer.inspect}; id_tokens are checked against the discovery issuer"
+                        issuer = json["issuer"]
+                        if issuer.is_a?(String) && !issuer.empty?
+                            @issuer = issuer
+                            if @issuer != configured_issuer
+                                log :warn, "Keycloak discovery issuer #{@issuer.inspect} differs from the configured " \
+                                           "site/realm #{configured_issuer.inspect}; id_tokens are checked against the discovery issuer"
+                            end
+                        else
+                            log :warn, "Keycloak discovery document has no issuer; id_tokens are checked against " \
+                                       "the configured site/realm #{configured_issuer.inspect}"
                         end
                         @certs_endpoint = json["jwks_uri"]
                         @userinfo_endpoint = json["userinfo_endpoint"]
@@ -183,7 +189,8 @@ module OmniAuth
                 end
 
                 azp = id_token['azp']
-                return if azp.nil? || azp == options.client_id
+                return if azp == options.client_id
+                return if azp.nil? && audience.length == 1
 
                 raise InvalidIdToken, "Unexpected id_token azp: #{azp.inspect} (expected #{options.client_id.inspect})"
             end

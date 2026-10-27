@@ -6,7 +6,7 @@
 
 - `raw_info` now decodes the OIDC `id_token` returned in the token response instead of the OAuth2 access token (CWE-287, F-CS-12).
 - `JSON::JWT.decode` now pins the expected signing algorithm to `RS256`, so a forged token using `alg: none` or an HS256/RS256 algorithm-confusion attack is rejected outright instead of silently validating (CWE-347/757, F-CS-11).
-- `raw_info` now validates the id_token's `iss` against the issuer in the realm's discovery document (falling back to the URL derived from `site`/`realm` when discovery has not run; a mismatch between the two is logged as a warning), `aud` against the configured client id, `azp` (when present) against the client id, and `exp`/`nbf` with 60 seconds of clock-skew leeway, raising `OmniAuth::Strategies::KeycloakOpenId::InvalidIdToken` on failure.
+- `raw_info` now validates the id_token's `iss` against the issuer in the realm's discovery document (falling back to the URL derived from `site`/`realm` when discovery has not run; a mismatch between the two is logged as a warning), `aud` against the configured client id, `azp` against the client id (required when `aud` has several values), and `exp`/`nbf` with 60 seconds of clock-skew leeway, raising `OmniAuth::Strategies::KeycloakOpenId::InvalidIdToken` on failure.
 - A token response with no `id_token` now raises `InvalidIdToken`, and a missing signing-key set raises `IntegrationError`, instead of an opaque `NoMethodError` / `KidNotFound`.
 
 **Behaviour changes for consumers:**

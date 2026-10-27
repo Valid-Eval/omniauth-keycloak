@@ -276,13 +276,19 @@ RSpec.describe OmniAuth::Strategies::KeycloakOpenId do
     end
 
     it 'accepts an audience array that includes the client id' do
-      stub_access_token(subject, id_token_string(claims: {'aud' => [client_id, 'some-other-client']}))
+      stub_access_token(subject, id_token_string(claims: {'aud' => [client_id, 'some-other-client'], 'azp' => client_id}))
 
       expect(subject.raw_info['sub']).to eq('user-123')
     end
 
+    it 'rejects an audience array with no azp claim' do
+      stub_access_token(subject, id_token_string(claims: {'aud' => [client_id, 'some-other-client']}))
+
+      expect { subject.raw_info }.to raise_error(OmniAuth::Strategies::KeycloakOpenId::InvalidIdToken, /azp/)
+    end
+
     it 'accepts an audience array when the client id is not the first element' do
-      stub_access_token(subject, id_token_string(claims: {'aud' => ['account', client_id]}))
+      stub_access_token(subject, id_token_string(claims: {'aud' => ['account', client_id], 'azp' => client_id}))
 
       expect(subject.raw_info['sub']).to eq('user-123')
     end
@@ -439,6 +445,16 @@ RSpec.describe OmniAuth::Strategies::KeycloakOpenId do
         stub_access_token(subject, id_token_string)
 
         expect { subject.raw_info }.to raise_error(OmniAuth::Strategies::KeycloakOpenId::InvalidIdToken, /issuer/)
+      end
+
+      context 'and the discovery issuer is empty' do
+        let(:discovery_issuer) { '' }
+
+        it 'falls back to the site/realm-derived issuer' do
+          stub_access_token(subject, id_token_string)
+
+          expect(subject.raw_info['sub']).to eq('user-123')
+        end
       end
     end
 
